@@ -5,7 +5,9 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! # Examples
+//!
+//! ```rust,no_run
 //! use rusty_scrfd::helpers::opencv_helper::OpenCVHelper;
 //! use opencv::core::Mat;
 //! use opencv::imgcodecs;
@@ -92,7 +94,9 @@ impl OpenCVHelper {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// # Examples
+    ///
+    /// ```rust,no_run
     /// use rusty_scrfd::helpers::opencv_helper::OpenCVHelper;
     /// use opencv::core::Mat;
     /// use opencv::imgcodecs;
@@ -148,7 +152,9 @@ impl OpenCVHelper {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// # Examples
+    ///
+    /// ```rust,no_run
     /// use rusty_scrfd::helpers::opencv_helper::OpenCVHelper;
     /// use opencv::core::Mat;
     /// use opencv::imgcodecs;

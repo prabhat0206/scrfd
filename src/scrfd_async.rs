@@ -1,7 +1,10 @@
 use ndarray::{s, Array2, Array3, ArrayD, ArrayViewD, Axis};
 use opencv::core::Mat;
 use opencv::prelude::MatTraitConst;
-use ort::{session::{RunOptions, Session}, value::Value};
+use ort::{
+    session::{RunOptions, Session},
+    value::Value,
+};
 use std::{collections::HashMap, error::Error};
 
 use super::helpers::{
@@ -15,12 +18,15 @@ use super::helpers::{
 /// for input size, confidence threshold, and IoU threshold.
 ///
 /// # Example
-/// ```rust
-/// use ort::Session;
-///
-/// let session = Session::builder()
-///     .with_model_from_file("path/to/model.onnx")
-///     .build()?;
+/// # Example
+/// ```rust,no_run
+/// # use std::error::Error;
+/// # use ort::session::Session;
+/// # use rusty_scrfd::SCRFDAsync;
+/// #
+/// # async fn example() -> Result<(), Box<dyn Error>> {
+/// let session = Session::builder()?
+///     .commit_from_file("path/to/model.onnx")?;
 ///
 /// let detector = SCRFDAsync::new(
 ///     session,
@@ -29,6 +35,8 @@ use super::helpers::{
 ///     0.45,        // IoU threshold
 ///     true         // relative output
 /// )?;
+/// # Ok(())
+/// # }
 /// ```
 pub struct SCRFDAsync {
     input_size: (i32, i32),
@@ -39,7 +47,6 @@ pub struct SCRFDAsync {
     num_anchors: usize,
     use_kps: bool,
     opencv_helper: OpenCVHelper,
-    center_cache: HashMap<(i32, i32, i32), Array2<f32>>,
     session: Session,
     _output_names: Vec<String>,
     input_names: Vec<String>,
@@ -60,7 +67,16 @@ impl SCRFDAsync {
     /// * `Result<Self, Box<dyn Error>>` - A new SCRFDAsync instance or an error
     ///
     /// # Example
-    /// ```rust
+    /// # Example
+    /// ```rust,no_run
+    /// # use std::error::Error;
+    /// # use ort::session::Session;
+    /// # use rusty_scrfd::SCRFDAsync;
+    /// #
+    /// # fn example() -> Result<(), Box<dyn Error>> {
+    /// let session = Session::builder()?
+    ///     .commit_from_file("model.onnx")?;
+    ///
     /// let detector = SCRFDAsync::new(
     ///     session,
     ///     (640, 640),
@@ -68,6 +84,8 @@ impl SCRFDAsync {
     ///     0.45,
     ///     true
     /// )?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(
         session: Session,
@@ -85,11 +103,17 @@ impl SCRFDAsync {
         let mean = 127.5;
         let std = 128.0;
 
-        let center_cache = HashMap::new();
-
         // Get model input and output names
-        let output_names = session.outputs.iter().map(|o| o.name.clone()).collect();
-        let input_names = session.inputs.iter().map(|i| i.name.clone()).collect();
+        let output_names = session
+            .outputs()
+            .iter()
+            .map(|o| o.name().to_string())
+            .collect();
+        let input_names = session
+            .inputs()
+            .iter()
+            .map(|i| i.name().to_string())
+            .collect();
 
         Ok(Self {
             input_size,
@@ -100,7 +124,6 @@ impl SCRFDAsync {
             num_anchors,
             use_kps,
             opencv_helper: OpenCVHelper::new(mean, std),
-            center_cache,
             session,
             _output_names: output_names,
             input_names,
@@ -117,12 +140,18 @@ impl SCRFDAsync {
     /// # Returns
     /// * `Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>>` - Tuple containing:
     ///   - Vector of score arrays
-    ///   - Vector of bounding box arrays
-    ///   - Vector of keypoint arrays (if enabled)
+    ///   - Vector of bounding boxes
+    ///   - Vector of keypoints (if enabled)
     ///
     /// # Example
-    /// ```rust
+    /// # Example
+    /// ```rust,no_run
+    /// # use std::collections::HashMap;
+    /// # async fn example(detector: &mut rusty_scrfd::SCRFDAsync, input_tensor: &ndarray::ArrayD<f32>) -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut center_cache = HashMap::new();
     /// let (scores, bboxes, kpss) = detector.forward(&input_tensor, &mut center_cache).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn forward(
         &mut self,
@@ -138,12 +167,8 @@ impl SCRFDAsync {
         let input_name = self.input_names[0].clone();
         let input = ort::inputs![input_name => input_value];
 
-        let run_options = match RunOptions::new() {
-            Ok(options) => options,
-            Err(e) => return Err(Box::new(e)),
-        };
-
         // Run the model
+        let run_options = RunOptions::new()?;
         let session_output = match self.session.run_async(input, &run_options) {
             Ok(output) => output,
             Err(e) => return Err(Box::new(e)),
@@ -155,9 +180,12 @@ impl SCRFDAsync {
         };
 
         let mut outputs = vec![];
-        for (_, output) in session_output.iter().enumerate() {
-            let f32_array: ArrayViewD<f32> = match output.1.try_extract_array() {
-                Ok(array) => array,
+        for (_idx, output) in session_output.iter().enumerate() {
+            let f32_array: ArrayViewD<f32> = match output.1.try_extract_tensor() {
+                Ok((_shape, data)) => {
+                    let shape: Vec<usize> = _shape.iter().map(|&x| x as usize).collect();
+                    ArrayViewD::from_shape(shape, data)?
+                }
                 Err(e) => return Err(Box::new(e)),
             };
             outputs.push(f32_array.to_owned());
@@ -181,7 +209,7 @@ impl SCRFDAsync {
 
             // Generate anchor centers
             let key = (height as i32, width as i32, stride);
-            let anchor_centers = if let Some(centers) = self.center_cache.get(&key) {
+            let anchor_centers = if let Some(centers) = center_cache.get(&key) {
                 centers.clone()
             } else {
                 let centers = ScrfdHelpers::generate_anchor_centers(
@@ -240,8 +268,15 @@ impl SCRFDAsync {
     ///   - Optional array of keypoints [x1, y1, x2, y2, ..., x5, y5]
     ///
     /// # Example
-    /// ```rust
+    /// # Example
+    /// ```rust,no_run
+    /// # use std::collections::HashMap;
+    /// # use opencv::core::Mat;
+    /// # async fn example(detector: &mut rusty_scrfd::SCRFDAsync, image: &Mat) -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut center_cache = HashMap::new();
     /// let (bboxes, keypoints) = detector.detect(&image, 10, "max", &mut center_cache).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn detect(
         &mut self,
