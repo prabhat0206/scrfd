@@ -39,6 +39,8 @@ qnn = ["ort/qnn"]
 rknpu = ["ort/rknpu"]
 tvm = ["ort/tvm"]
 vitis = ["ort/vitis"]
+fetch-models = ["ort/fetch-models"]
+download-binaries = ["ort/download-binaries"]
 
 # ORT utilities
 load-dynamic = ["ort/load-dynamic"]
