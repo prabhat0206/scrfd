@@ -6,6 +6,9 @@ pub mod scrfd;
 pub mod scrfd_async;
 
 pub use helpers::*;
+pub use ndarray;
+pub use opencv;
+pub use ort;
 pub use scrfd::SCRFD;
 
 #[cfg(feature = "async")]
