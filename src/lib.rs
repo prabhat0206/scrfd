@@ -43,7 +43,7 @@ mod tests {
             .build()?;
 
         // Load test image
-        let image_path = "sample_input/1.jpg";
+        let image_path = "sample_input/1.png";
         let image = std::fs::read(image_path)?;
 
         let mut image = match imdecode(&Vector::<u8>::from_slice(&image), IMREAD_UNCHANGED) {
@@ -117,7 +117,7 @@ mod tests {
         let mut scrfd = SCRFDAsync::new(session, (640, 640), 0.25, 0.4, true)?;
 
         // Load test image
-        let image_path = "sample_input/1.jpg";
+        let image_path = "sample_input/1.png";
         let image = std::fs::read(image_path)?;
 
         let mut image = match imdecode(&Vector::<u8>::from_slice(&image), IMREAD_UNCHANGED) {
