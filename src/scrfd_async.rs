@@ -1,7 +1,10 @@
 use ndarray::{s, Array2, Array3, ArrayD, ArrayViewD, Axis};
 use opencv::core::Mat;
 use opencv::prelude::MatTraitConst;
-use ort::{session::{RunOptions, Session}, value::Value};
+use ort::{
+    session::{RunOptions, Session},
+    value::Value,
+};
 use std::{collections::HashMap, error::Error};
 
 use super::helpers::{
@@ -15,12 +18,14 @@ use super::helpers::{
 /// for input size, confidence threshold, and IoU threshold.
 ///
 /// # Example
-/// ```rust
-/// use ort::Session;
+/// ```no_run
+/// use ort::session::Session;
+/// use rusty_scrfd::SCRFDAsync;
 ///
-/// let session = Session::builder()
-///     .with_model_from_file("path/to/model.onnx")
-///     .build()?;
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let session = Session::builder()?
+///     .commit_from_file("path/to/model.onnx")?;
 ///
 /// let detector = SCRFDAsync::new(
 ///     session,
@@ -29,6 +34,8 @@ use super::helpers::{
 ///     0.45,        // IoU threshold
 ///     true         // relative output
 /// )?;
+/// # Ok(())
+/// # }
 /// ```
 pub struct SCRFDAsync {
     input_size: (i32, i32),
@@ -60,7 +67,12 @@ impl SCRFDAsync {
     /// * `Result<Self, Box<dyn Error>>` - A new SCRFDAsync instance or an error
     ///
     /// # Example
-    /// ```rust
+    /// ```no_run
+    /// use ort::session::Session;
+    /// use rusty_scrfd::SCRFDAsync;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let session = Session::builder()?.commit_from_file("model.onnx")?;
     /// let detector = SCRFDAsync::new(
     ///     session,
     ///     (640, 640),
@@ -68,6 +80,8 @@ impl SCRFDAsync {
     ///     0.45,
     ///     true
     /// )?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(
         session: Session,
@@ -88,8 +102,16 @@ impl SCRFDAsync {
         let center_cache = HashMap::new();
 
         // Get model input and output names
-        let output_names = session.outputs.iter().map(|o| o.name.clone()).collect();
-        let input_names = session.inputs.iter().map(|i| i.name.clone()).collect();
+        let output_names = session
+            .outputs()
+            .iter()
+            .map(|o| o.name().to_string())
+            .collect();
+        let input_names = session
+            .inputs()
+            .iter()
+            .map(|i| i.name().to_string())
+            .collect();
 
         Ok(Self {
             input_size,
@@ -121,8 +143,24 @@ impl SCRFDAsync {
     ///   - Vector of keypoint arrays (if enabled)
     ///
     /// # Example
-    /// ```rust
+    /// ```no_run
+    /// use ort::session::Session;
+    /// use rusty_scrfd::SCRFDAsync;
+    /// use ndarray::ArrayD;
+    /// use std::collections::HashMap;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let session = Session::builder()?.commit_from_file("model.onnx")?;
+    /// let mut detector = SCRFDAsync::new(session, (640, 640), 0.5, 0.45, true)?;
+    ///
+    /// // Create dummy input tensor (1, 3, 640, 640)
+    /// let input_tensor = ArrayD::<f32>::zeros(vec![1, 3, 640, 640]);
+    /// let mut center_cache = HashMap::new();
+    ///
     /// let (scores, bboxes, kpss) = detector.forward(&input_tensor, &mut center_cache).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn forward(
         &mut self,
@@ -240,8 +278,25 @@ impl SCRFDAsync {
     ///   - Optional array of keypoints [x1, y1, x2, y2, ..., x5, y5]
     ///
     /// # Example
-    /// ```rust
+    /// ```no_run
+    /// use ort::session::Session;
+    /// use rusty_scrfd::SCRFDAsync;
+    /// use opencv::prelude::*;
+    /// use opencv::core::Mat;
+    /// use std::collections::HashMap;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let session = Session::builder()?.commit_from_file("model.onnx")?;
+    /// let mut detector = SCRFDAsync::new(session, (640, 640), 0.5, 0.45, true)?;
+    ///
+    /// // Create dummy image
+    /// let image = Mat::default();
+    /// let mut center_cache = HashMap::new();
+    ///
     /// let (bboxes, keypoints) = detector.detect(&image, 10, "max", &mut center_cache).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn detect(
         &mut self,

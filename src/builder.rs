@@ -5,18 +5,18 @@
 //!
 //! # Example
 //! ```no_run
-//! use scrfd::builder::SCRFDBuilder;
+//! use rusty_scrfd::builder::SCRFDBuilder;
 //! use ort::session::Session;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let session = Session::builder()?.with_model_from_file("model.onnx")?;
+//! let session = Session::builder()?.commit_from_file("model.onnx")?;
 //!
 //! // Build synchronous model with default parameters
 //! let model = SCRFDBuilder::new(session)
 //!     .build()?;
 //!
 //! // Or customize parameters
-//! let session = Session::builder()?.with_model_from_file("model.onnx")?;
+//! let session = Session::builder()?.commit_from_file("model.onnx")?;
 //! let model = SCRFDBuilder::new(session)
 //!     .set_input_size((320, 320))
 //!     .set_conf_thres(0.6)
@@ -46,8 +46,8 @@ use crate::scrfd_async::SCRFDAsync;
 ///
 /// Default values are:
 /// - Input size: (640, 640)
-/// - Confidence threshold: 0.5
-/// - IoU threshold: 0.5
+/// - Confidence threshold: 0.25
+/// - IoU threshold: 0.4
 pub struct SCRFDBuilder {
     session: Session,
     input_size: Option<(i32, i32)>,

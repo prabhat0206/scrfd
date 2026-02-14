@@ -14,7 +14,7 @@
 //! let helper = OpenCVHelper::new(127.5, 128.0);
 //!
 //! // Load an image
-//! let image = imgcodecs::imread("test_data/test_image.jpg", imgcodecs::IMREAD_COLOR)?;
+//! let image = imgcodecs::imread("sample_input/1.jpg", imgcodecs::IMREAD_COLOR)?;
 //!
 //! // Use the helper for image processing
 //! let (resized_image, scale) = helper.resize_with_aspect_ratio(&image, (640, 640))?;
@@ -98,7 +98,7 @@ impl OpenCVHelper {
     /// use opencv::imgcodecs;
     ///
     /// let helper = OpenCVHelper::new(127.5, 128.0);
-    /// let image = imgcodecs::imread("test_data/test_image.jpg", imgcodecs::IMREAD_COLOR)?;
+    /// let image = imgcodecs::imread("sample_input/1.jpg", imgcodecs::IMREAD_COLOR)?;
     /// let input_tensor = helper.prepare_input_tensor(&image, (640, 640))?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
@@ -154,7 +154,7 @@ impl OpenCVHelper {
     /// use opencv::imgcodecs;
     ///
     /// let helper = OpenCVHelper::new(127.5, 128.0);
-    /// let image = imgcodecs::imread("sample_input/test_image.jpg", imgcodecs::IMREAD_COLOR)?;
+    /// let image = imgcodecs::imread("sample_input/1.jpg", imgcodecs::IMREAD_COLOR)?;
     /// let (resized_image, scale) = helper.resize_with_aspect_ratio(&image, (640, 640))?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
