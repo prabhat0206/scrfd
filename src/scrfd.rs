@@ -85,7 +85,11 @@ impl SCRFD {
         let input_width = input_tensor.shape()[3];
         let input_value = Value::from_array(input_tensor)?;
         let input_name = self.input_names[0].clone();
-        let input = ort::inputs![input_name => input_value];
+        let input = match ort::inputs![input_name => input_value] {
+            Ok(i) => i,
+            Err(e) => return Err(Box::new(e)),
+        };
+
         // Run the model
         let session_output = match self.session.run(input) {
             Ok(output) => output,
@@ -94,7 +98,10 @@ impl SCRFD {
 
         let mut outputs = vec![];
         for (_, output) in session_output.iter().enumerate() {
-            let f32_array: ArrayViewD<f32> = output.1.try_extract_array()?;
+            let f32_array: ArrayViewD<f32> = match output.1.try_extract_tensor() {
+                Ok(array) => array,
+                Err(e) => return Err(Box::new(e)),
+            };
             outputs.push(f32_array.to_owned());
         }
         drop(session_output);

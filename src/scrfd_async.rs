@@ -2,7 +2,7 @@ use ndarray::{s, Array2, Array3, ArrayD, ArrayViewD, Axis};
 use opencv::core::Mat;
 use opencv::prelude::MatTraitConst;
 use ort::{
-    session::{RunOptions, Session},
+    session::Session,
     value::Value,
 };
 use std::{collections::HashMap, error::Error};
@@ -102,16 +102,8 @@ impl SCRFDAsync {
         let center_cache = HashMap::new();
 
         // Get model input and output names
-        let output_names = session
-            .outputs()
-            .iter()
-            .map(|o| o.name().to_string())
-            .collect();
-        let input_names = session
-            .inputs()
-            .iter()
-            .map(|i| i.name().to_string())
-            .collect();
+        let output_names = session.outputs.iter().map(|o| o.name.clone()).collect();
+        let input_names = session.inputs.iter().map(|i| i.name.clone()).collect();
 
         Ok(Self {
             input_size,
@@ -191,7 +183,7 @@ impl SCRFDAsync {
 
         let mut outputs = vec![];
         for (_, output) in session_output.iter().enumerate() {
-            let f32_array: ArrayViewD<f32> = match output.1.try_extract_array() {
+            let f32_array: ArrayViewD<f32> = match output.1.try_extract_tensor() {
                 Ok(array) => array,
                 Err(e) => return Err(Box::new(e)),
             };
