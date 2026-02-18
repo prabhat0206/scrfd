@@ -141,9 +141,11 @@ impl OpenCVHelper {
     /// # Returns
     ///
     /// A Result containing either:
-    /// * `Ok((Mat, f32))` - A tuple containing:
+    /// * `Ok((Mat, f32, i32, i32))` - A tuple containing:
     ///   - The resized and padded image
     ///   - The scale factor used for resizing
+    ///   - The x offset used for centering
+    ///   - The y offset used for centering
     /// * `Err(Box<dyn Error>)` - An error if the operation fails
     ///
     /// # Examples
@@ -162,7 +164,7 @@ impl OpenCVHelper {
         &self,
         image: &Mat,
         target_size: (i32, i32),
-    ) -> Result<(Mat, f32), Box<dyn Error>> {
+    ) -> Result<(Mat, f32, i32, i32), Box<dyn Error>> {
         let orig_width = image.cols() as f32;
         let orig_height = image.rows() as f32;
 
@@ -171,7 +173,7 @@ impl OpenCVHelper {
         let model_ratio = input_height as f32 / input_width as f32;
 
         // Calculate new dimensions while preserving aspect ratio
-        let (new_width, new_height, _, _) = if im_ratio > model_ratio {
+        let (new_width, new_height, x_offset, y_offset) = if im_ratio > model_ratio {
             let new_height = input_height;
             let new_width = ((input_height as f32) / im_ratio).round() as i32;
             let x_offset = (input_width - new_width) / 2;
@@ -201,10 +203,10 @@ impl OpenCVHelper {
             core::CV_8UC3,
             core::Scalar::all(0.0),
         )?;
-        let mut roi = det_image.roi_mut(core::Rect::new(0, 0, input_height, new_height))?;
+        let mut roi = det_image.roi_mut(core::Rect::new(x_offset, y_offset, new_width, new_height))?;
         opencv_resized_image.copy_to(&mut roi)?;
 
-        Ok((det_image, det_scale))
+        Ok((det_image, det_scale, x_offset, y_offset))
     }
 
     pub fn draw_rectangle(&self, image: &mut Mat, rect: core::Rect) -> Result<(), Box<dyn Error>> {
@@ -243,7 +245,7 @@ mod tests {
         )?;
 
         let helper = OpenCVHelper::new(127.5, 128.0);
-        let (resized, scale) = helper.resize_with_aspect_ratio(&test_image, (200, 200))?;
+        let (resized, scale, _, _) = helper.resize_with_aspect_ratio(&test_image, (200, 200))?;
 
         // Check dimensions
         assert_eq!(resized.rows(), 200);
@@ -272,7 +274,7 @@ mod tests {
         )?;
 
         let helper = OpenCVHelper::new(127.5, 128.0);
-        let (resized, scale) = helper.resize_with_aspect_ratio(&test_image, (200, 200))?;
+        let (resized, scale, _, _) = helper.resize_with_aspect_ratio(&test_image, (200, 200))?;
 
         // Check dimensions
         assert_eq!(resized.rows(), 200);

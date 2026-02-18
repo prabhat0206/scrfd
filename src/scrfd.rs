@@ -184,7 +184,7 @@ impl SCRFD {
         let orig_width = image.cols() as f32;
         let orig_height = image.rows() as f32;
 
-        let (det_image, det_scale) = self
+        let (det_image, det_scale, x_offset, y_offset) = self
             .opencv_helper
             .resize_with_aspect_ratio(image, self.input_size)?;
         let input_tensor = self
@@ -197,14 +197,28 @@ impl SCRFD {
             return Err("No faces detected".into());
         }
 
-        // Concatenate scores and bboxes
+        // Concatenate scores and bboxes, then remap from canvas coords to
+        // original image coords: original = (canvas - offset) / det_scale
         let scores = ScrfdHelpers::concatenate_array2(&scores_list)?;
-        let bboxes = ScrfdHelpers::concatenate_array2(&bboxes_list)?;
-        let bboxes = &bboxes / det_scale;
+        let mut bboxes = ScrfdHelpers::concatenate_array2(&bboxes_list)?;
+        let x_off = x_offset as f32;
+        let y_off = y_offset as f32;
+        for mut row in bboxes.rows_mut() {
+            row[0] = (row[0] - x_off) / det_scale; // x1
+            row[1] = (row[1] - y_off) / det_scale; // y1
+            row[2] = (row[2] - x_off) / det_scale; // x2
+            row[3] = (row[3] - y_off) / det_scale; // y2
+        }
 
         let mut kpss = if self.use_kps {
-            let kpss = ScrfdHelpers::concatenate_array3(&kpss_list)?;
-            Some(&kpss / det_scale)
+            let mut kpss = ScrfdHelpers::concatenate_array3(&kpss_list)?;
+            for mut face in kpss.outer_iter_mut() {
+                for mut kp in face.rows_mut() {
+                    kp[0] = (kp[0] - x_off) / det_scale; // x
+                    kp[1] = (kp[1] - y_off) / det_scale; // y
+                }
+            }
+            Some(kpss)
         } else {
             None
         };
