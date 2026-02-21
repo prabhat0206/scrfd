@@ -9,8 +9,8 @@
 //! use ndarray::array;
 //! use rusty_scrfd::helpers::relative_conversion::RelativeConversion;
 //!
-//! // Convert bounding boxes
-//! let bboxes = array![[100.0, 100.0, 200.0, 200.0]];
+//! // Convert bounding boxes (score column is preserved)
+//! let bboxes = array![[100.0, 100.0, 200.0, 200.0, 0.95]];
 //! let relative_boxes = RelativeConversion::absolute_to_relative_bboxes(&bboxes, 400, 400);
 //!
 //! // Convert keypoints
@@ -45,8 +45,9 @@ impl RelativeConversion {
     ///
     /// # Returns
     ///
-    /// A 2D array containing bounding boxes in `[left, top, width, height]` format with values
-    /// normalized between 0 and 1.
+    /// A 2D array containing bounding boxes in `[left, top, width, height, ...]` format with
+    /// coordinate values normalized between 0 and 1. Any extra columns beyond the first 4
+    /// (e.g. confidence scores) are preserved as-is.
     ///
     /// # Examples
     ///
@@ -54,9 +55,9 @@ impl RelativeConversion {
     /// use ndarray::array;
     /// use rusty_scrfd::helpers::relative_conversion::RelativeConversion;
     ///
-    /// let bboxes = array![[100.0, 100.0, 200.0, 200.0]];
+    /// let bboxes = array![[100.0, 100.0, 200.0, 200.0, 0.95]];
     /// let relative_boxes = RelativeConversion::absolute_to_relative_bboxes(&bboxes, 400, 400);
-    /// // relative_boxes will contain [[0.25, 0.25, 0.25, 0.25]]
+    /// // relative_boxes will contain [[0.25, 0.25, 0.25, 0.25, 0.95]]
     /// ```
     ///
     /// # Panics
@@ -73,8 +74,10 @@ impl RelativeConversion {
         let img_width_f = img_width as f32;
         let img_height_f = img_height as f32;
 
-        // Initialize a new Array2 for relative bounding boxes
-        let mut relative_bboxes = Array2::<f32>::zeros((bboxes.nrows(), 4));
+        let ncols = bboxes.ncols();
+
+        // Preserve all columns (coords + any extra such as score)
+        let mut relative_bboxes = Array2::<f32>::zeros((bboxes.nrows(), ncols));
 
         for (i, bbox) in bboxes.axis_iter(Axis(0)).enumerate() {
             let x1 = bbox[0];
@@ -83,16 +86,15 @@ impl RelativeConversion {
             let y2 = bbox[3];
 
             // Calculate relative coordinates
-            let left = x1 / img_width_f;
-            let top = y1 / img_height_f;
-            let width = (x2 - x1) / img_width_f;
-            let height = (y2 - y1) / img_height_f;
+            relative_bboxes[[i, 0]] = x1 / img_width_f;
+            relative_bboxes[[i, 1]] = y1 / img_height_f;
+            relative_bboxes[[i, 2]] = (x2 - x1) / img_width_f;
+            relative_bboxes[[i, 3]] = (y2 - y1) / img_height_f;
 
-            // Assign to the new array
-            relative_bboxes[[i, 0]] = left;
-            relative_bboxes[[i, 1]] = top;
-            relative_bboxes[[i, 2]] = width;
-            relative_bboxes[[i, 3]] = height;
+            // Copy any extra columns (e.g. confidence score) unchanged
+            for c in 4..ncols {
+                relative_bboxes[[i, c]] = bbox[c];
+            }
         }
 
         relative_bboxes
@@ -165,7 +167,36 @@ mod tests {
 
     #[test]
     fn test_absolute_to_relative_bboxes() {
-        // Test case 1: Single bounding box
+        // Test case 1: Single bounding box with score
+        let bboxes = array![[100.0, 100.0, 200.0, 200.0, 0.95]];
+        let result = RelativeConversion::absolute_to_relative_bboxes(&bboxes, 400, 400);
+        assert_eq!(result.shape(), &[1, 5]);
+        assert!((result[[0, 0]] - 0.25).abs() < 1e-6); // left
+        assert!((result[[0, 1]] - 0.25).abs() < 1e-6); // top
+        assert!((result[[0, 2]] - 0.25).abs() < 1e-6); // width
+        assert!((result[[0, 3]] - 0.25).abs() < 1e-6); // height
+        assert!((result[[0, 4]] - 0.95).abs() < 1e-6); // score preserved
+
+        // Test case 2: Multiple bounding boxes with scores
+        let bboxes = array![[0.0, 0.0, 100.0, 100.0, 0.9], [200.0, 200.0, 300.0, 300.0, 0.8]];
+        let result = RelativeConversion::absolute_to_relative_bboxes(&bboxes, 400, 400);
+        assert_eq!(result.shape(), &[2, 5]);
+
+        // First bbox
+        assert!((result[[0, 0]] - 0.0).abs() < 1e-6); // left
+        assert!((result[[0, 1]] - 0.0).abs() < 1e-6); // top
+        assert!((result[[0, 2]] - 0.25).abs() < 1e-6); // width
+        assert!((result[[0, 3]] - 0.25).abs() < 1e-6); // height
+        assert!((result[[0, 4]] - 0.9).abs() < 1e-6);  // score preserved
+
+        // Second bbox
+        assert!((result[[1, 0]] - 0.5).abs() < 1e-6); // left
+        assert!((result[[1, 1]] - 0.5).abs() < 1e-6); // top
+        assert!((result[[1, 2]] - 0.25).abs() < 1e-6); // width
+        assert!((result[[1, 3]] - 0.25).abs() < 1e-6); // height
+        assert!((result[[1, 4]] - 0.8).abs() < 1e-6);  // score preserved
+
+        // Test case 3: Bbox without score (4 columns only)
         let bboxes = array![[100.0, 100.0, 200.0, 200.0]];
         let result = RelativeConversion::absolute_to_relative_bboxes(&bboxes, 400, 400);
         assert_eq!(result.shape(), &[1, 4]);
@@ -173,23 +204,6 @@ mod tests {
         assert!((result[[0, 1]] - 0.25).abs() < 1e-6); // top
         assert!((result[[0, 2]] - 0.25).abs() < 1e-6); // width
         assert!((result[[0, 3]] - 0.25).abs() < 1e-6); // height
-
-        // Test case 2: Multiple bounding boxes
-        let bboxes = array![[0.0, 0.0, 100.0, 100.0], [200.0, 200.0, 300.0, 300.0]];
-        let result = RelativeConversion::absolute_to_relative_bboxes(&bboxes, 400, 400);
-        assert_eq!(result.shape(), &[2, 4]);
-
-        // First bbox
-        assert!((result[[0, 0]] - 0.0).abs() < 1e-6); // left
-        assert!((result[[0, 1]] - 0.0).abs() < 1e-6); // top
-        assert!((result[[0, 2]] - 0.25).abs() < 1e-6); // width
-        assert!((result[[0, 3]] - 0.25).abs() < 1e-6); // height
-
-        // Second bbox
-        assert!((result[[1, 0]] - 0.5).abs() < 1e-6); // left
-        assert!((result[[1, 1]] - 0.5).abs() < 1e-6); // top
-        assert!((result[[1, 2]] - 0.25).abs() < 1e-6); // width
-        assert!((result[[1, 3]] - 0.25).abs() < 1e-6); // height
     }
 
     #[test]

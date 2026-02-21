@@ -65,8 +65,8 @@ impl SCRFDBuilder {
     /// # Returns
     /// A new builder instance with default parameters:
     /// - Input size: (640, 640)
-    /// - Confidence threshold: 0.5
-    /// - IoU threshold: 0.5
+    /// - Confidence threshold: 0.25
+    /// - IoU threshold: 0.4
     pub fn new(session: Session) -> Self {
         SCRFDBuilder {
             session,

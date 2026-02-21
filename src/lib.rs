@@ -57,13 +57,13 @@ mod tests {
         let mut center_cache = HashMap::new();
         let (detections, _) = scrfd.detect(&image, 0, "max", &mut center_cache)?;
 
-        println!("Detections: {:?}", detections);
+        log::trace!("Detections: {:?}", detections);
 
         // Draw rectangles around detected faces
         for det in detections.rows() {
             let image_width = image.cols();
             let image_height = image.rows();
-            println!("Image size: {}x{}", image_width, image_height);
+            log::trace!("Image size: {}x{}", image_width, image_height);
 
             let x = det[0];
             let y = det[1];
@@ -134,13 +134,13 @@ mod tests {
         let mut center_cache = HashMap::new();
         let (detections, _) = scrfd.detect(&image, 0, "max", &mut center_cache).await?;
 
-        println!("Async Detections: {:?}", detections);
+        log::trace!("Async Detections: {:?}", detections);
 
         // Draw rectangles around detected faces
         for det in detections.rows() {
             let image_width = image.cols();
             let image_height = image.rows();
-            println!("Image size: {}x{}", image_width, image_height);
+            log::trace!("Image size: {}x{}", image_width, image_height);
 
             let x = det[0];
             let y = det[1];
