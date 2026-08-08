@@ -1,6 +1,6 @@
 [package]
 name = "rusty_scrfd"
-version = "2.0.0"
+version = "2.0.1"
 authors = ["Prabhat Ranjan <prabhat0206@hotmail.com>"]
 edition = "2021"
 description = "A high-performance face detection library using SCRFD model with OpenCV integration"
