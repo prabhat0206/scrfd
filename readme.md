@@ -31,6 +31,7 @@
 ---
 
 ## Features
+
 - **Face Detection**: Detect bounding boxes and landmarks for faces in images.
 - **Asynchronous Support**: Optional async functionality for non-blocking operations.
 - **FP16 Support**: Optional half-precision inference for FP16 ONNX models (auto-detected).
@@ -49,6 +50,7 @@
 ## Installation
 
 Add the library and its required peer dependencies to your `Cargo.toml`:
+
 ```toml
 [dependencies]
 rusty_scrfd = { version = "2.0.0", features = ["async"] } # Enable async feature if needed
@@ -58,6 +60,7 @@ ndarray = "0.17"
 ```
 
 To enable synchronous mode only, omit the `async` feature:
+
 ```toml
 [dependencies]
 rusty_scrfd = "2.0.0"
@@ -68,12 +71,13 @@ ndarray = "0.17"
 
 ### Optional Features
 
-| Feature | Description |
-|---------|-------------|
+| Feature | Description                                   |
+| ------- | --------------------------------------------- |
 | `async` | Enables asynchronous face detection via tokio |
-| `fp16`  | Enables FP16 (half-precision) model support |
+| `fp16`  | Enables FP16 (half-precision) model support   |
 
 To use an FP16 ONNX model:
+
 ```toml
 [dependencies]
 rusty_scrfd = { version = "2.0.0", features = ["fp16"] }
@@ -171,7 +175,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ---
 
 ### Asynchronous Example
+
 Enable the `async` feature in `Cargo.toml`:
+
 ```toml
 [dependencies]
 rusty_scrfd = { version = "2.0.0", features = ["async"] }
@@ -190,7 +196,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = "path/to/scrfd_model.onnx";
     let session = SessionBuilder::new().unwrap().with_model_from_file(model_path)?;
 
-    // Initialize SCRFDAsync using the builder pattern
+    // Initialize SCRFDA using the builder pattern
     let scrfd = SCRFDBuilder::new(session)
         .set_input_size((640, 640))
         .set_conf_thres(0.25)
@@ -221,6 +227,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## API Documentation
 
 ### Builder Pattern
+
 The `SCRFDBuilder` provides a fluent interface for configuring SCRFD models:
 
 ```rust
@@ -233,6 +240,7 @@ let model = SCRFDBuilder::new(session)
 ```
 
 For async models:
+
 ```rust
 let model = SCRFDBuilder::new(session)
     .set_input_size((640, 640))
@@ -243,12 +251,14 @@ let model = SCRFDBuilder::new(session)
 ```
 
 ### Default Parameters
+
 - Input size: (640, 640)
 - Confidence threshold: 0.25
 - IoU threshold: 0.4
 - Relative output: true
 
 ### Detect Function
+
 The `detect` function now accepts OpenCV's `Mat` type instead of `image::RgbImage`:
 
 ```rust
@@ -262,7 +272,9 @@ pub fn detect(
 ```
 
 ### Helper Functions
+
 **Available in `ScrfdHelpers`**:
+
 - `generate_anchor_centers`: Efficiently generate anchor centers for feature maps
 - `distance2bbox`: Convert distances to bounding boxes
 - `distance2kps`: Convert distances to keypoints
@@ -271,9 +283,11 @@ pub fn detect(
 ---
 
 ## Contributing
+
 Contributions are welcome! Please open an issue or submit a pull request for improvements.
 
 ### Running Tests
+
 - For synchronous features:
   ```bash
   cargo test
@@ -286,11 +300,12 @@ Contributions are welcome! Please open an issue or submit a pull request for imp
 ---
 
 ## License
+
 This library is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
 ## References
+
 - [SCRFD Paper](https://arxiv.org/abs/2105.04714)
 - [ONNX Runtime](https://onnxruntime.ai/)
-

@@ -10,7 +10,7 @@ pub use helpers::*;
 pub use scrfd::SCRFD;
 
 #[cfg(feature = "async")]
-pub use scrfd_async::SCRFDAsync;
+pub use scrfd_async::SCRFDA;
 
 #[cfg(test)]
 mod tests {
@@ -114,7 +114,7 @@ mod tests {
             .with_execution_providers([CPUExecutionProvider::default().build()])?
             .commit_from_file(model_path)?;
 
-        let mut scrfd = SCRFDAsync::new(session, (640, 640), 0.25, 0.4, true)?;
+        let mut scrfd = SCRFDA::new(session, (640, 640), 0.25, 0.4, true)?;
 
         // Load test image
         let image_path = "sample_input/1.png";

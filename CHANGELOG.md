@@ -12,7 +12,7 @@
 ### New Features
 
 - **Builder Pattern**: Introduced `SCRFDBuilder` for fluent and simplified model configuration.
-- **Async Support**: Added full asynchronous capabilities via `tokio` with `SCRFDAsync`, enabling non-blocking face detection.
+- **Async Support**: Added full asynchronous capabilities via `tokio` with `SCRFDA`, enabling non-blocking face detection.
 - **Execution Providers**: Added support for various ONNX Runtime execution providers including CUDA, CoreML, DirectML, OpenVINO, TensorRT, ROCm, and more.
 
 ### Improvements

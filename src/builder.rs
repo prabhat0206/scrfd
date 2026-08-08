@@ -31,12 +31,12 @@ use ort::session::Session;
 use std::error::Error;
 
 #[cfg(feature = "async")]
-use crate::scrfd_async::SCRFDAsync;
+use crate::scrfd_async::SCRFDA;
 
 /// Builder for configuring and constructing SCRFD face detection models
 ///
 /// This struct provides a fluent builder interface for creating both synchronous [`SCRFD`]
-/// and asynchronous [`SCRFDAsync`] model instances with customizable parameters.
+/// and asynchronous [`SCRFDA`] model instances with customizable parameters.
 ///
 /// The builder allows setting:
 /// - Input image dimensions
@@ -149,15 +149,15 @@ impl SCRFDBuilder {
     ///
     /// # Returns
     /// A Result containing either:
-    /// * `Ok(SCRFDAsync)` - Successfully built model
+    /// * `Ok(SCRFDA)` - Successfully built model
     /// * `Err(Box<dyn Error>)` - Error during model construction
     #[cfg(feature = "async")]
-    pub fn build_async(self) -> Result<SCRFDAsync, Box<dyn Error>> {
+    pub fn build_async(self) -> Result<SCRFDA, Box<dyn Error>> {
         let input_size = self.input_size.ok_or("Input size not set")?;
         let conf_thres = self.conf_thres.ok_or("Confidence threshold not set")?;
         let iou_thres = self.iou_thres.ok_or("IoU threshold not set")?;
 
-        SCRFDAsync::new(
+        SCRFDA::new(
             self.session,
             input_size,
             conf_thres,
