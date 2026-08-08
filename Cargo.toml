@@ -1,6 +1,6 @@
 [package]
 name = "rusty_scrfd"
-version = "1.3.1"
+version = "2.0.0"
 authors = ["Prabhat Ranjan <prabhat0206@hotmail.com>"]
 edition = "2021"
 description = "A high-performance face detection library using SCRFD model with OpenCV integration"
@@ -20,35 +20,12 @@ exclude = [
 [features]
 default = []
 async = ["tokio"]
-
-# ONNX Runtime Execution Providers
-cuda = ["ort/cuda"]
-coreml = ["ort/coreml"]
-directml = ["ort/directml"]
-openvino = ["ort/openvino"]
-tensorrt = ["ort/tensorrt"]
-rocm = ["ort/rocm"]
-onednn = ["ort/onednn"]
-nnapi = ["ort/nnapi"]
-xnnpack = ["ort/xnnpack"]
-cann = ["ort/cann"]
-acl = ["ort/acl"]
-armnn = ["ort/armnn"]
-migraphx = ["ort/migraphx"]
-qnn = ["ort/qnn"]
-rknpu = ["ort/rknpu"]
-tvm = ["ort/tvm"]
-vitis = ["ort/vitis"]
-fetch-models = ["ort/fetch-models"]
-download-binaries = ["ort/download-binaries"]
-
-# ORT utilities
-load-dynamic = ["ort/load-dynamic"]
+fp16 = ["half", "ort/half"]
 
 [dependencies]
-ort = { version = "2.0.0-rc.11", features = [ "ndarray" ] }
-opencv-binding-generator = "0.100.0"
-opencv = "0.98.1"
+ort = { version = "2.0.0-rc.13", features = [ "ndarray" ] }
+half = { version = "2.4", optional = true }
+opencv = "0.100.1"
 ndarray = "0.17.2"
 uuid = "1.20.0"
 anyhow = "1.0.101"

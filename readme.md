@@ -4,6 +4,15 @@
 
 ---
 
+## Breaking Changes in v2.0.0
+
+- Removed crate re-exports of `ort`, `opencv`, and `ndarray`
+  - Users must now add these dependencies directly to their `Cargo.toml`
+  - This does NOT affect users who already import these crates directly
+  - See Installation section for compatible versions
+
+---
+
 ## Breaking Changes in v1.2.0
 
 - The `detect` function now accepts `opencv::core::Mat` instead of `image::RgbImage`
@@ -24,6 +33,7 @@
 ## Features
 - **Face Detection**: Detect bounding boxes and landmarks for faces in images.
 - **Asynchronous Support**: Optional async functionality for non-blocking operations.
+- **FP16 Support**: Optional half-precision inference for FP16 ONNX models (auto-detected).
 - **Builder Pattern**: Fluent interface for easy model configuration.
 - **Customizable Parameters**:
   - Input size
@@ -38,17 +48,40 @@
 
 ## Installation
 
-Add the library to your `Cargo.toml`:
+Add the library and its required peer dependencies to your `Cargo.toml`:
 ```toml
 [dependencies]
-rusty_scrfd = { version = "1.2.0", features = ["async"] } # Enable async feature if needed
+rusty_scrfd = { version = "2.0.0", features = ["async"] } # Enable async feature if needed
+ort = { version = "=2.0.0-rc.13", features = ["ndarray"] }
+opencv = "0.100"
+ndarray = "0.17"
 ```
 
 To enable synchronous mode only, omit the `async` feature:
 ```toml
 [dependencies]
-rusty_scrfd = "1.2.0"
+rusty_scrfd = "2.0.0"
+ort = { version = "=2.0.0-rc.13", features = ["ndarray"] }
+opencv = "0.100"
+ndarray = "0.17"
 ```
+
+### Optional Features
+
+| Feature | Description |
+|---------|-------------|
+| `async` | Enables asynchronous face detection via tokio |
+| `fp16`  | Enables FP16 (half-precision) model support |
+
+To use an FP16 ONNX model:
+```toml
+[dependencies]
+rusty_scrfd = { version = "2.0.0", features = ["fp16"] }
+```
+
+When `fp16` is enabled, the library automatically detects whether the loaded model uses FP16 tensors and handles the f32↔f16 conversion transparently. No code changes required — the same API works for both FP32 and FP16 models.
+
+> **Note:** `ort`, `opencv`, and `ndarray` types appear in `rusty_scrfd`'s public API. You must use compatible versions to avoid type mismatches at compile time.
 
 ---
 
@@ -141,7 +174,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Enable the `async` feature in `Cargo.toml`:
 ```toml
 [dependencies]
-rusty_scrfd = { version = "1.2.0", features = ["async"] }
+rusty_scrfd = { version = "2.0.0", features = ["async"] }
 ```
 
 ```rust

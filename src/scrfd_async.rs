@@ -5,6 +5,8 @@ use ort::{
     session::{RunOptions, Session},
     value::Value,
 };
+#[cfg(feature = "fp16")]
+use ort::value::{DynValue, ValueType};
 use std::{collections::HashMap, error::Error};
 
 use super::helpers::{
@@ -49,6 +51,8 @@ pub struct SCRFDAsync {
     session: Session,
     input_names: Vec<String>,
     relative_output: bool,
+    #[cfg(feature = "fp16")]
+    is_fp16: bool,
 }
 
 impl SCRFDAsync {
@@ -104,6 +108,13 @@ impl SCRFDAsync {
             .map(|i| i.name().to_string())
             .collect();
 
+        #[cfg(feature = "fp16")]
+        let is_fp16 = session
+            .inputs()
+            .first()
+            .map(|i| matches!(i.dtype(), ValueType::Tensor { ty, .. } if *ty == ort::value::TensorElementType::Float16))
+            .unwrap_or(false);
+
         Ok(Self {
             input_size,
             conf_thres,
@@ -116,6 +127,8 @@ impl SCRFDAsync {
             session,
             input_names,
             relative_output,
+            #[cfg(feature = "fp16")]
+            is_fp16,
         })
     }
 
@@ -161,6 +174,14 @@ impl SCRFDAsync {
         let mut kpss_list = Vec::new();
         let input_height = input_tensor.shape()[2];
         let input_width = input_tensor.shape()[3];
+        #[cfg(feature = "fp16")]
+        let input_value: DynValue = if self.is_fp16 {
+            let input_tensor_f16 = input_tensor.mapv(half::f16::from_f32);
+            Value::from_array(input_tensor_f16)?.into_dyn()
+        } else {
+            Value::from_array(input_tensor.to_owned())?.into_dyn()
+        };
+        #[cfg(not(feature = "fp16"))]
         let input_value = Value::from_array(input_tensor.to_owned())?;
         let input_name = self.input_names[0].clone();
         let input = ort::inputs![input_name => input_value];
@@ -181,13 +202,32 @@ impl SCRFDAsync {
             Err(e) => return Err(Box::new(e)),
         };
 
-        let mut outputs = vec![];
-        for (_, output) in session_output.iter().enumerate() {
-            let f32_array: ArrayViewD<f32> = match output.1.try_extract_array() {
-                Ok(array) => array,
-                Err(e) => return Err(Box::new(e)),
-            };
-            outputs.push(f32_array.to_owned());
+        let mut outputs = Vec::with_capacity(session_output.len());
+        #[cfg(feature = "fp16")]
+        {
+            if self.is_fp16 {
+                for (_, output) in session_output.iter().enumerate() {
+                    if let Ok(f16_array) = output.1.try_extract_array::<half::f16>() {
+                        outputs.push(f16_array.mapv(|x| x.to_f32()));
+                    } else if let Ok(f32_array) = output.1.try_extract_array::<f32>() {
+                        outputs.push(f32_array.to_owned());
+                    } else {
+                        return Err("Unsupported output tensor element type".into());
+                    }
+                }
+            } else {
+                for (_, output) in session_output.iter().enumerate() {
+                    let f32_array: ArrayViewD<f32> = output.1.try_extract_array()?;
+                    outputs.push(f32_array.to_owned());
+                }
+            }
+        }
+        #[cfg(not(feature = "fp16"))]
+        {
+            for (_, output) in session_output.iter().enumerate() {
+                let f32_array: ArrayViewD<f32> = output.1.try_extract_array()?;
+                outputs.push(f32_array.to_owned());
+            }
         }
 
         drop(session_output);
@@ -358,10 +398,7 @@ impl SCRFDAsync {
         let det = if max_num > 0 && max_num < det.shape()[0] {
             let area = (&det.slice(s![.., 2]) - &det.slice(s![.., 0]))
                 * (&det.slice(s![.., 3]) - &det.slice(s![.., 1]));
-            let image_center = (
-                orig_width / 2.0,
-                orig_height / 2.0,
-            );
+            let image_center = (orig_width / 2.0, orig_height / 2.0);
             let offsets = ndarray::stack![
                 Axis(0),
                 (&det.slice(s![.., 0]) + &det.slice(s![.., 2])) / 2.0 - image_center.1 as f32,
