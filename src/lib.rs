@@ -19,7 +19,7 @@ mod tests {
     use opencv::imgcodecs::imdecode;
     use opencv::prelude::MatTraitConst;
     use opencv::{core, imgcodecs, imgproc};
-    use ort::execution_providers::CPUExecutionProvider;
+    use ort::ep::CPU;
     use ort::session::Session;
     use std::collections::HashMap;
     use std::path::Path;
@@ -29,7 +29,7 @@ mod tests {
         // Initialize SCRFD
         let model_path = Path::new("models/det_10g.onnx");
         let session = Session::builder()?
-            .with_execution_providers([CPUExecutionProvider::default().build()])?
+            .with_execution_providers([CPU::default().build()])?
             .commit_from_file(model_path)?;
 
         let mut scrfd = builder::SCRFDBuilder::new(session)

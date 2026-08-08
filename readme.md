@@ -33,6 +33,7 @@
 ## Features
 - **Face Detection**: Detect bounding boxes and landmarks for faces in images.
 - **Asynchronous Support**: Optional async functionality for non-blocking operations.
+- **FP16 Support**: Optional half-precision inference for FP16 ONNX models (auto-detected).
 - **Builder Pattern**: Fluent interface for easy model configuration.
 - **Customizable Parameters**:
   - Input size
@@ -64,6 +65,21 @@ ort = { version = "=2.0.0-rc.13", features = ["ndarray"] }
 opencv = "0.100"
 ndarray = "0.17"
 ```
+
+### Optional Features
+
+| Feature | Description |
+|---------|-------------|
+| `async` | Enables asynchronous face detection via tokio |
+| `fp16`  | Enables FP16 (half-precision) model support |
+
+To use an FP16 ONNX model:
+```toml
+[dependencies]
+rusty_scrfd = { version = "2.0.0", features = ["fp16"] }
+```
+
+When `fp16` is enabled, the library automatically detects whether the loaded model uses FP16 tensors and handles the f32↔f16 conversion transparently. No code changes required — the same API works for both FP32 and FP16 models.
 
 > **Note:** `ort`, `opencv`, and `ndarray` types appear in `rusty_scrfd`'s public API. You must use compatible versions to avoid type mismatches at compile time.
 
