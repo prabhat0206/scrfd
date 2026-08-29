@@ -17,7 +17,7 @@
 //! let image = imgcodecs::imread("sample_input/1.png", imgcodecs::IMREAD_COLOR)?;
 //!
 //! // Use the helper for image processing
-//! let (resized_image, scale) = helper.resize_with_aspect_ratio(&image, (640, 640))?;
+//! let (resized_image, scale, x_offset, y_offset) = helper.resize_with_aspect_ratio(&image, (640, 640))?;
 //! let input_tensor = helper.prepare_input_tensor(&resized_image, (640, 640))?;
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
@@ -157,7 +157,7 @@ impl OpenCVHelper {
     ///
     /// let helper = OpenCVHelper::new(127.5, 128.0);
     /// let image = imgcodecs::imread("sample_input/1.png", imgcodecs::IMREAD_COLOR)?;
-    /// let (resized_image, scale) = helper.resize_with_aspect_ratio(&image, (640, 640))?;
+    /// let (resized_image, scale, x_offset, y_offset) = helper.resize_with_aspect_ratio(&image, (640, 640))?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn resize_with_aspect_ratio(

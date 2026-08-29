@@ -22,19 +22,13 @@ pub struct SCRFD {
     session: Session,
     input_names: Vec<String>,
     relative_output: bool,
+    anchors: HashMap<(i32, i32, i32), Array2<f32>>,
     #[cfg(feature = "fp16")]
     is_fp16: bool,
 }
 
 impl SCRFD {
     /// Constructor to initialize the SCRFD model
-    /// # Arguments:
-    /// - session: ONNX Runtime session for the model
-    /// - input_size: Tuple of (width, height) for the input image
-    /// - conf_thres: Confidence threshold
-    /// - iou_thres: IoU threshold
-    /// # Returns:
-    /// - Self
     pub fn new(
         session: Session,
         input_size: (i32, i32),
@@ -50,6 +44,23 @@ impl SCRFD {
 
         let mean = 127.5;
         let std = 128.0;
+
+        // Pre-compute static anchors for the target input dimensions
+        let mut anchors = HashMap::new();
+        for &stride in &feat_stride_fpn {
+            let height = input_size.1 as usize / stride as usize;
+            let width = input_size.0 as usize / stride as usize;
+            let key = (height as i32, width as i32, stride);
+            anchors.insert(
+                key,
+                ScrfdHelpers::generate_anchor_centers(
+                    num_anchors,
+                    height,
+                    width,
+                    stride as f32,
+                ),
+            );
+        }
 
         // Get model input names
         let input_names = session
@@ -77,19 +88,16 @@ impl SCRFD {
             session,
             input_names,
             relative_output,
+            anchors,
             #[cfg(feature = "fp16")]
             is_fp16,
         })
     }
 
     /// The forward method processes the image and runs the model
-    /// # Arguments:
-    /// - input_tensor: &ArrayD<f32>
-    /// # Returns:
-    /// - Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>>
     pub fn forward(
         &mut self,
-        input_tensor: ArrayD<f32>,
+        input_tensor: &ArrayD<f32>,
         center_cache: &mut HashMap<(i32, i32, i32), Array2<f32>>,
     ) -> Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>> {
         let mut scores_list = Vec::new();
@@ -102,13 +110,13 @@ impl SCRFD {
             let input_tensor_f16 = input_tensor.mapv(half::f16::from_f32);
             Value::from_array(input_tensor_f16)?.into_dyn()
         } else {
-            Value::from_array(input_tensor)?.into_dyn()
+            Value::from_array(input_tensor.to_owned())?.into_dyn()
         };
         #[cfg(not(feature = "fp16"))]
-        let input_value = Value::from_array(input_tensor)?;
+        let input_value = Value::from_array(input_tensor.to_owned())?;
         let input_name = self.input_names[0].clone();
         let input = ort::inputs![input_name => input_value];
-        // Run the model
+        // Run the model on immutable &self
         let session_output = match self.session.run(input) {
             Ok(output) => output,
             Err(e) => return Err(Box::new(e)),
@@ -157,16 +165,20 @@ impl SCRFD {
             let height = input_height / stride as usize;
             let width = input_width / stride as usize;
 
-            // Generate anchor centers
+            // Retrieve pre-generated anchor centers or compute
             let key = (height as i32, width as i32, stride);
-            let anchor_centers = center_cache.entry(key).or_insert_with(|| {
-                ScrfdHelpers::generate_anchor_centers(
-                    self.num_anchors,
-                    height,
-                    width,
-                    stride as f32,
-                )
-            });
+            let anchor_centers = if let Some(centers) = self.anchors.get(&key) {
+                centers
+            } else {
+                center_cache.entry(key).or_insert_with(|| {
+                    ScrfdHelpers::generate_anchor_centers(
+                        self.num_anchors,
+                        height,
+                        width,
+                        stride as f32,
+                    )
+                })
+            };
 
             // Filter scores by threshold
             let pos_inds: Vec<usize> = scores
@@ -199,12 +211,6 @@ impl SCRFD {
     }
 
     /// Detect faces in the image
-    /// # Arguments:
-    /// - image: &Mat
-    /// - max_num: usize
-    /// - metric: &str
-    /// # Returns:
-    /// - Result<(Array2<f32>, Option<Array3<f32>>), Box<dyn Error>>
     pub fn detect(
         &mut self,
         image: &Mat,
@@ -222,7 +228,7 @@ impl SCRFD {
             .opencv_helper
             .prepare_input_tensor(&det_image, self.input_size)?;
         let (scores_list, bboxes_list, kpss_list) =
-            self.forward(input_tensor.into_dyn(), center_cache)?;
+            self.forward(&input_tensor.into_dyn(), center_cache)?;
 
         if scores_list.is_empty() {
             return Err("No faces detected".into());

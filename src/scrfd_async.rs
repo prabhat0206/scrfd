@@ -8,6 +8,7 @@ use ort::{
     value::Value,
 };
 use std::{collections::HashMap, error::Error};
+use tokio::sync::Mutex as TokioMutex;
 
 use super::helpers::{
     opencv_helper::OpenCVHelper, relative_conversion::RelativeConversion,
@@ -48,43 +49,16 @@ pub struct SCRFDA {
     num_anchors: usize,
     use_kps: bool,
     opencv_helper: OpenCVHelper,
-    session: Session,
+    session: TokioMutex<Session>,
     input_names: Vec<String>,
     relative_output: bool,
+    anchors: HashMap<(i32, i32, i32), Array2<f32>>,
     #[cfg(feature = "fp16")]
     is_fp16: bool,
 }
 
 impl SCRFDA {
     /// Creates a new SCRFD face detector instance.
-    ///
-    /// # Arguments
-    /// * `session` - An ONNX Runtime session containing the loaded SCRFD model
-    /// * `input_size` - Tuple of (width, height) for the input image dimensions
-    /// * `conf_thres` - Confidence threshold for face detection (0.0 to 1.0)
-    /// * `iou_thres` - IoU threshold for non-maximum suppression (0.0 to 1.0)
-    /// * `relative_output` - Whether to return coordinates relative to image dimensions
-    ///
-    /// # Returns
-    /// * `Result<Self, Box<dyn Error>>` - A new SCRFDA instance or an error
-    ///
-    /// # Example
-    /// ```no_run
-    /// use ort::session::Session;
-    /// use rusty_scrfd::SCRFDA;
-    ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let session = Session::builder()?.commit_from_file("model.onnx")?;
-    /// let detector = SCRFDA::new(
-    ///     session,
-    ///     (640, 640),
-    ///     0.5,
-    ///     0.45,
-    ///     true
-    /// )?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn new(
         session: Session,
         input_size: (i32, i32),
@@ -100,6 +74,23 @@ impl SCRFDA {
 
         let mean = 127.5;
         let std = 128.0;
+
+        // Pre-compute static anchors for the target input dimensions
+        let mut anchors = HashMap::new();
+        for &stride in &feat_stride_fpn {
+            let height = input_size.1 as usize / stride as usize;
+            let width = input_size.0 as usize / stride as usize;
+            let key = (height as i32, width as i32, stride);
+            anchors.insert(
+                key,
+                ScrfdHelpers::generate_anchor_centers(
+                    num_anchors,
+                    height,
+                    width,
+                    stride as f32,
+                ),
+            );
+        }
 
         // Get model input names
         let input_names = session
@@ -124,48 +115,18 @@ impl SCRFDA {
             num_anchors,
             use_kps,
             opencv_helper: OpenCVHelper::new(mean, std),
-            session,
+            session: TokioMutex::new(session),
             input_names,
             relative_output,
+            anchors,
             #[cfg(feature = "fp16")]
             is_fp16,
         })
     }
 
-    /// Performs the forward pass of the SCRFD model.
-    ///
-    /// # Arguments
-    /// * `input_tensor` - Input tensor of shape [1, 3, height, width]
-    /// * `center_cache` - Mutable reference to the center cache for anchor points
-    ///
-    /// # Returns
-    /// * `Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>>` - Tuple containing:
-    ///   - Vector of score arrays
-    ///   - Vector of bounding box arrays
-    ///   - Vector of keypoint arrays (if enabled)
-    ///
-    /// # Example
-    /// ```no_run
-    /// use ort::session::Session;
-    /// use rusty_scrfd::SCRFDA;
-    /// use ndarray::ArrayD;
-    /// use std::collections::HashMap;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let session = Session::builder()?.commit_from_file("model.onnx")?;
-    /// let mut detector = SCRFDA::new(session, (640, 640), 0.5, 0.45, true)?;
-    ///
-    /// // Create dummy input tensor (1, 3, 640, 640)
-    /// let input_tensor = ArrayD::<f32>::zeros(vec![1, 3, 640, 640]);
-    /// let mut center_cache = HashMap::new();
-    ///
-    /// let (scores, bboxes, kpss) = detector.forward(&input_tensor, &mut center_cache).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Performs the forward pass of the SCRFD model concurrently (&self).
     pub async fn forward(
-        &mut self,
+        &self,
         input_tensor: &ArrayD<f32>,
         center_cache: &mut HashMap<(i32, i32, i32), Array2<f32>>,
     ) -> Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>> {
@@ -191,8 +152,9 @@ impl SCRFDA {
             Err(e) => return Err(Box::new(e)),
         };
 
-        // Run the model
-        let session_output = match self.session.run_async(input, &run_options) {
+        // Acquire lock on session only for the forward call
+        let mut session_guard = self.session.lock().await;
+        let session_output = match session_guard.run_async(input, &run_options) {
             Ok(output) => output,
             Err(e) => return Err(Box::new(e)),
         };
@@ -231,6 +193,7 @@ impl SCRFDA {
         }
 
         drop(session_output);
+        drop(session_guard);
 
         let fmc = self._fmc;
         for (idx, &stride) in self.feat_stride_fpn.iter().enumerate() {
@@ -246,16 +209,20 @@ impl SCRFDA {
             let height = input_height / stride as usize;
             let width = input_width / stride as usize;
 
-            // Generate anchor centers
+            // Retrieve pre-generated anchor centers or compute
             let key = (height as i32, width as i32, stride);
-            let anchor_centers = center_cache.entry(key).or_insert_with(|| {
-                ScrfdHelpers::generate_anchor_centers(
-                    self.num_anchors,
-                    height,
-                    width,
-                    stride as f32,
-                )
-            });
+            let anchor_centers = if let Some(centers) = self.anchors.get(&key) {
+                centers
+            } else {
+                center_cache.entry(key).or_insert_with(|| {
+                    ScrfdHelpers::generate_anchor_centers(
+                        self.num_anchors,
+                        height,
+                        width,
+                        stride as f32,
+                    )
+                })
+            };
 
             // Filter scores by threshold
             let pos_inds: Vec<usize> = scores
@@ -287,42 +254,9 @@ impl SCRFDA {
         Ok((scores_list, bboxes_list, kpss_list))
     }
 
-    /// Detects faces in an input image.
-    ///
-    /// # Arguments
-    /// * `image` - Input image as OpenCV Mat
-    /// * `max_num` - Maximum number of faces to detect (0 for unlimited)
-    /// * `metric` - Metric for selecting faces when max_num is exceeded ("max" for largest area)
-    /// * `center_cache` - Mutable reference to the center cache for anchor points
-    ///
-    /// # Returns
-    /// * `Result<(Array2<f32>, Option<Array3<f32>>), Box<dyn Error>>` - Tuple containing:
-    ///   - Array of bounding boxes [x1, y1, x2, y2, score]
-    ///   - Optional array of keypoints [x1, y1, x2, y2, ..., x5, y5]
-    ///
-    /// # Example
-    /// ```no_run
-    /// use ort::session::Session;
-    /// use rusty_scrfd::SCRFDA;
-    /// use opencv::prelude::*;
-    /// use opencv::core::Mat;
-    /// use std::collections::HashMap;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let session = Session::builder()?.commit_from_file("model.onnx")?;
-    /// let mut detector = SCRFDA::new(session, (640, 640), 0.5, 0.45, true)?;
-    ///
-    /// // Create dummy image
-    /// let image = Mat::default();
-    /// let mut center_cache = HashMap::new();
-    ///
-    /// let (bboxes, keypoints) = detector.detect(&image, 10, "max", &mut center_cache).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Detects faces in an input image concurrently (&self).
     pub async fn detect(
-        &mut self,
+        &self,
         image: &Mat,
         max_num: usize,
         metric: &str,

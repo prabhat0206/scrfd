@@ -111,10 +111,10 @@ mod tests {
         // Initialize SCRFD
         let model_path = Path::new("models/det_10g.onnx");
         let session = Session::builder()?
-            .with_execution_providers([CPUExecutionProvider::default().build()])?
+            .with_execution_providers([CPU::default().build()])?
             .commit_from_file(model_path)?;
 
-        let mut scrfd = SCRFDA::new(session, (640, 640), 0.25, 0.4, true)?;
+        let scrfd = SCRFDA::new(session, (640, 640), 0.25, 0.4, true)?;
 
         // Load test image
         let image_path = "sample_input/1.png";
