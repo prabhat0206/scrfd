@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.2] - 2026-10-06
+
+### Improvements
+
+- **Performance**: Added `forward_owned` on `SCRFD` and `SCRFDA`, which consumes the input tensor by value and hands it to `ort::Value::from_array` without an intermediate clone. `detect` now uses it, saving one full input-tensor copy (~4.9 MB for 640x640 f32) per inference. The borrowing `forward(&ArrayD<f32>, ..)` is kept as a thin wrapper for API compatibility.
+
 ## [1.3.1] - 2026-02-14
 
 ### New Features

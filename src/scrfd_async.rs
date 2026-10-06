@@ -124,10 +124,10 @@ impl SCRFDA {
         })
     }
 
-    /// Performs the forward pass of the SCRFD model concurrently (&self).
-    pub async fn forward(
+    /// Performs the forward pass consuming the input tensor by value (zero-copy Value creation).
+    pub async fn forward_owned(
         &self,
-        input_tensor: &ArrayD<f32>,
+        input_tensor: ArrayD<f32>,
         center_cache: &mut HashMap<(i32, i32, i32), Array2<f32>>,
     ) -> Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>> {
         let mut scores_list = Vec::new();
@@ -140,10 +140,10 @@ impl SCRFDA {
             let input_tensor_f16 = input_tensor.mapv(half::f16::from_f32);
             Value::from_array(input_tensor_f16)?.into_dyn()
         } else {
-            Value::from_array(input_tensor.to_owned())?.into_dyn()
+            Value::from_array(input_tensor)?.into_dyn()
         };
         #[cfg(not(feature = "fp16"))]
-        let input_value = Value::from_array(input_tensor.to_owned())?;
+        let input_value = Value::from_array(input_tensor)?;
         let input_name = self.input_names[0].clone();
         let input = ort::inputs![input_name => input_value];
 
@@ -254,6 +254,15 @@ impl SCRFDA {
         Ok((scores_list, bboxes_list, kpss_list))
     }
 
+    /// Performs the forward pass of the SCRFD model concurrently (&self).
+    pub async fn forward(
+        &self,
+        input_tensor: &ArrayD<f32>,
+        center_cache: &mut HashMap<(i32, i32, i32), Array2<f32>>,
+    ) -> Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>> {
+        self.forward_owned(input_tensor.to_owned(), center_cache).await
+    }
+
     /// Detects faces in an input image concurrently (&self).
     pub async fn detect(
         &self,
@@ -272,7 +281,7 @@ impl SCRFDA {
             .opencv_helper
             .prepare_input_tensor(&det_image, self.input_size)?;
         let (scores_list, bboxes_list, kpss_list) =
-            match self.forward(&input_tensor.into_dyn(), center_cache).await {
+            match self.forward_owned(input_tensor.into_dyn(), center_cache).await {
                 Ok(result) => result,
                 Err(e) => return Err(e),
             };

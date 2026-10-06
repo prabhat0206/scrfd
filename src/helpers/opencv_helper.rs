@@ -118,10 +118,10 @@ impl OpenCVHelper {
             core::CV_32F,
         )?;
 
-        // Convert OpenCV Mat (CHW format) to ndarray
+        // Build the NCHW ndarray directly from the blob slice (one copy into an owned Array4)
         let tensor_shape = (1, 3, input_size.1 as usize, input_size.0 as usize);
-        let tensor_data: Vec<f32> = blob.data_typed()?.to_vec(); // Convert slice to Vec
-        let input_tensor = Array4::from_shape_vec(tensor_shape, tensor_data)?;
+        let slice = blob.data_typed::<f32>()?;
+        let input_tensor = ndarray::ArrayView4::from_shape(tensor_shape, slice)?.to_owned();
 
         Ok(input_tensor)
     }

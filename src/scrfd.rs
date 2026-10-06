@@ -94,10 +94,10 @@ impl SCRFD {
         })
     }
 
-    /// The forward method processes the image and runs the model
-    pub fn forward(
+    /// The forward method processes the image and runs the model, consuming input tensor by value
+    pub fn forward_owned(
         &mut self,
-        input_tensor: &ArrayD<f32>,
+        input_tensor: ArrayD<f32>,
         center_cache: &mut HashMap<(i32, i32, i32), Array2<f32>>,
     ) -> Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>> {
         let mut scores_list = Vec::new();
@@ -110,10 +110,10 @@ impl SCRFD {
             let input_tensor_f16 = input_tensor.mapv(half::f16::from_f32);
             Value::from_array(input_tensor_f16)?.into_dyn()
         } else {
-            Value::from_array(input_tensor.to_owned())?.into_dyn()
+            Value::from_array(input_tensor)?.into_dyn()
         };
         #[cfg(not(feature = "fp16"))]
-        let input_value = Value::from_array(input_tensor.to_owned())?;
+        let input_value = Value::from_array(input_tensor)?;
         let input_name = self.input_names[0].clone();
         let input = ort::inputs![input_name => input_value];
         // Run the model on immutable &self
@@ -210,6 +210,15 @@ impl SCRFD {
         Ok((scores_list, bboxes_list, kpss_list))
     }
 
+    /// The forward method processes the image and runs the model
+    pub fn forward(
+        &mut self,
+        input_tensor: &ArrayD<f32>,
+        center_cache: &mut HashMap<(i32, i32, i32), Array2<f32>>,
+    ) -> Result<(Vec<Array2<f32>>, Vec<Array2<f32>>, Vec<Array3<f32>>), Box<dyn Error>> {
+        self.forward_owned(input_tensor.to_owned(), center_cache)
+    }
+
     /// Detect faces in the image
     pub fn detect(
         &mut self,
@@ -228,7 +237,7 @@ impl SCRFD {
             .opencv_helper
             .prepare_input_tensor(&det_image, self.input_size)?;
         let (scores_list, bboxes_list, kpss_list) =
-            self.forward(&input_tensor.into_dyn(), center_cache)?;
+            self.forward_owned(input_tensor.into_dyn(), center_cache)?;
 
         if scores_list.is_empty() {
             return Err("No faces detected".into());
